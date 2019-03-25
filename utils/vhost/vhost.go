@@ -18,9 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fatedier/frp/utils/errors"
 	"github.com/fatedier/frp/utils/log"
 	frpNet "github.com/fatedier/frp/utils/net"
+
+	"github.com/fatedier/golib/errors"
 )
 
 type muxFunc func(frpNet.Conn) (frpNet.Conn, map[string]string, error)
@@ -58,6 +59,7 @@ type VhostRouteConfig struct {
 	RewriteHost string
 	Username    string
 	Password    string
+	Headers     map[string]string
 
 	CreateConnFn CreateConnFunc
 }
@@ -100,17 +102,24 @@ func (v *VhostMuxer) getListener(name, path string) (l *Listener, exist bool) {
 
 	domainSplit := strings.Split(name, ".")
 	if len(domainSplit) < 3 {
-		return l, false
-	}
-	domainSplit[0] = "*"
-	name = strings.Join(domainSplit, ".")
-
-	vr, found = v.registryRouter.Get(name, path)
-	if !found {
 		return
 	}
 
-	return vr.payload.(*Listener), true
+	for {
+		if len(domainSplit) < 3 {
+			return
+		}
+
+		domainSplit[0] = "*"
+		name = strings.Join(domainSplit, ".")
+
+		vr, found = v.registryRouter.Get(name, path)
+		if found {
+			return vr.payload.(*Listener), true
+		}
+		domainSplit = domainSplit[1:]
+	}
+	return
 }
 
 func (v *VhostMuxer) run() {
